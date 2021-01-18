@@ -1,0 +1,273 @@
+---
+title: "tarea_jonathan_ulloa"
+author: "jonathan ulloa"
+date: "17-01-2021"
+output: html_document
+---
+## PARTE A
+
+## Familiarizandose con los datos
+
+```{r setup, include = FALSE}
+library(tidyverse)
+library(dplyr)
+library(corrplot)
+#library(grDevices)
+#library(Hmisc)
+books  <- read_csv("book_reviews.csv")
+```
+### base de datos con 2000 filas, 4 columnas
+```{r}
+dim(books)   
+```
+
+### para ver las primeras filas
+```{r}
+head(books)   
+```
+### columnas y tipo de datos de cada una
+```{r}
+colnames(books)
+str(books)
+```
+
+### columnas con valores nulos
+```{r}
+colSums(is.na(books))  
+```
+solo columan review tiene valores nulos   
+otra forma de ver las columnas con valores nulos
+
+```{r}
+for (i in 1:length(books)) {
+  if (nrow(filter(books, is.na(books[[i]]) == T)) != 0)
+    print(paste( colnames(books[i]), "contiene NA"))
+  else
+    print(paste( colnames(books[i]), "no contiene NA"))
+}
+```
+
+### Listando los distintos valores en cada columna
+(como select distinct en sql)
+rapidamente vemos inconsitencia en state (registros con combre y con abreviaturas
+
+```{r}
+unique(books$book)
+unique(books$review)
+unique(books$state)
+unique(books$price)
+```
+
+
+
+
+## Depurando
+###  Solo seleccionare las filas con review no NA
+
+antes de depurar, tenemos los siguientes valores en NA
+```{r}
+filter(books, is.na(review) )
+```
+
+Ahora filtramos los valores NA de la columna review
+```{r}
+booksNA <- filter(books, is.na(review) ) 
+
+books <- filter(books, !is.na(review) ) 
+dim(books)
+colSums(is.na(books)) 
+
+```
+ahora no hay filas con valores NA, tenemos 1794 registros y 4 columnas
+
+Finalmente eliminamos el 10.3%  de los registros, en mi opinion si es significativo la eliminacion de 206 registros porque el conjunto de datos es bastante reducido (solo 2000)
+
+
+## corrigiendo inconsistencia status
+
+todos los dsitintos valores
+```{r}
+unique(books$state)
+```
+
+Agregando nueva columna con la abreviatura del estado
+```{r}
+booksNA<-booksNA %>% mutate( ab_state = case_when( 
+                          state == "Texas" ~ "TX",
+                          state == "Florida" ~ "FL",
+                          state == "California" ~ "CA",
+                          state == "New York" ~ "NY",
+                          TRUE ~ state
+                        )
+              )
+
+books<-books %>% mutate( ab_state = case_when( 
+                          state == "Texas" ~ "TX",
+                          state == "Florida" ~ "FL",
+                          state == "California" ~ "CA",
+                          state == "New York" ~ "NY",
+                          TRUE ~ state
+                        )
+              )
+
+head(books)
+
+```
+
+
+## Facilitando trabajo con campo review
+de string a numerico
+
+esta sera la escala
+Excellent       5
+Great           4
+Good            3
+Fair            2
+Poor            1
+
+```{r}
+books<-books %>% mutate( review_num = case_when( 
+                          review == "Poor" ~ 1,
+                          review == "Fair" ~ 2,
+                          review == "Good" ~ 3,
+                          review == "Great" ~ 4,
+                          review == "Excellent" ~ 5
+                        )
+              )
+
+
+```
+
+
+```{r}
+books<-books %>% mutate( is_high_review = case_when( 
+                          review_num > 3 ~ TRUE,
+                          TRUE ~ FALSE
+                        )
+              )
+head(books)
+```
+
+
+¿Se le ocurre otra manera de definir "más rentable", que seea consistente con la información que tiene diisponible en la base de datos?
+
+Creo que la mejor forma de definir la rentabilidad seria observar la relacion precio/cantidad (cantidad de filas) e incluso anañizar la ventas segun ciudad 
+
+
+
+# INFORME
+
+
+## Introducción: 
+
+El presente informe tiene por objetivo general determinar el libro con mejor rentabilidad, entendiendo como rentabilidad la relación existente entre los beneficios que proporciona y el esfurzo requerido.
+
+Se cuenta con una pequeña fuente de datos que indica el nombre del libro, la reseña obtenida por el cliente o usuario, el estado donde se vendio y su respectivo precio. Por tanto, para objetivos de este informe solo se podran considerar datos asociados a las ventas y no a los costos de ningun tipo.
+
+
+## Analisis
+
+grafico book/review
+```{r}
+p <- ggplot(data = books,
+            mapping = aes(x = factor(book),
+            fill = factor(review_num)))
+p + geom_bar(position = 'stack', stat = 'count')     
+```
+
+Según lo obserbado, la evaluacion de los libros es bastante similar en todos los libros y en todos los niveles de puntaucion, por lo tanto no podemos usar el review como un dato para determinar la rentabilidad.
+
+
+
+
+
+
+
+```{r}
+
+ggplot(data = books, 
+       aes(x = book, fill = book)) +
+  geom_bar(width = 0.4, fill='steelblue', aes(y = (..count..)/sum(..count..))) +
+  xlab("book") +
+  scale_y_continuous("Porcentaje",labels=scales::percent) +
+  labs(title = "Gráfico de barras ",
+  subtitle = "Frecuencia relativa porcentual ventas")
+
+```
+
+En los cinco libros se mantiene un porcentaje de ventas muy estrecho bordeando el 20%.  
+
+A partir de este grafico podemos concliur que la forma de determinar la mejor rentabilidad es direcamente calculando las ventas por cada libro.
+
+
+
+
+
+
+  
+```{r}
+table_price <- books %>%
+  group_by(book) %>%
+  summarize(Total = sum(price))
+table_price
+
+``` 
+
+
+## Conclusión 
+
+El libro con mejor rentabilidad es "Secrets Of R For Advanced Students" recaudando 18.000 u
+
+¿Cuál es la respuesta a la pregunta principal? ¿Hay algo que creea que limita el análisis? ¿Qué debe hacer el lector con los hallazgos?
+
+
+
+
+
+## EXTRAS
+
+
+```{r}
+ggplot(data = books,
+       aes(x = book, y = ab_state, color=price)) + 
+  geom_point() +
+  geom_jitter()+
+  labs(title="Grafico de dispersión")
+```
+
+En este grafico vemos la dispersiön de las ventas de libros por estado, observamos que el resultado es muy homogeneo, por lo cual y sumado a lo limitado de los datos, no podemos inferir que una estado es significativamente mejor que otro para las ventas.
+
+
+### Sin review
+```{r}
+p <- ggplot(data = booksNA,
+            mapping = aes(x = factor(book),
+            fill = factor(ab_state)))
+p + geom_bar(position = 'dodge', stat = 'count')    
+```
+
+Para mejorar los niveles de review de los clientes, en este grafico notaran los libros que menos review reciben por cada estado.
+
+
+
+```{r}
+table_review_T <- filter(books, is_high_review == TRUE)  %>%
+  group_by(book) %>%
+  summarize(Total_false = sum(is_high_review))
+  
+table_review_T
+```
+
+Fundamentals of R For Beginners es el mas popular
+
+
+
+
+## PARTE B
+
+
+sales  <- read_csv("sales2019.csv")
+
+dim(sales)
+colnames(sales)
+str(sales)
