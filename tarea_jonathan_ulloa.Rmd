@@ -151,10 +151,10 @@ head(books)
 
 ¿Se le ocurre otra manera de definir "más rentable", que seea consistente con la información que tiene diisponible en la base de datos?
 
-Creo que la mejor forma de definir la rentabilidad seria observar la relacion precio/cantidad (cantidad de filas) e incluso anañizar la ventas segun ciudad 
-
-
-
+Creo que la mejor forma de definir la rentabilidad seria observar la relacion precio/cantidad (cantidad de filas) e incluso analizar la ventas segun ciudad    
+     
+       
+            
 # INFORME
 
 
@@ -175,13 +175,10 @@ p <- ggplot(data = books,
 p + geom_bar(position = 'stack', stat = 'count')     
 ```
 
-Según lo obserbado, la evaluacion de los libros es bastante similar en todos los libros y en todos los niveles de puntaucion, por lo tanto no podemos usar el review como un dato para determinar la rentabilidad.
-
-
-
-
-
-
+Según lo obserbado, la evaluacion de los libros es bastante similar en todos los libros y en todos los niveles de puntaucion, por lo tanto no podemos usar el review como un dato para determinar la rentabilidad.         
+      
+      
+     
 
 ```{r}
 
@@ -213,12 +210,12 @@ table_price
 
 ``` 
 
-
+     
+     
 ## Conclusión 
 
-El libro con mejor rentabilidad es "Secrets Of R For Advanced Students" recaudando 18.000 u
-
-¿Cuál es la respuesta a la pregunta principal? ¿Hay algo que creea que limita el análisis? ¿Qué debe hacer el lector con los hallazgos?
+El libro con mejor rentabilidad es "Secrets Of R For Advanced Students" recaudando 18.000 unidades monetarias.
+       
 
 
 
@@ -235,7 +232,7 @@ ggplot(data = books,
   labs(title="Grafico de dispersión")
 ```
 
-En este grafico vemos la dispersiön de las ventas de libros por estado, observamos que el resultado es muy homogeneo, por lo cual y sumado a lo limitado de los datos, no podemos inferir que una estado es significativamente mejor que otro para las ventas.
+En este grafico vemos la dispersiön de las ventas de libros por estado, observamos que el resultado es muy homogeneo, por lo cual y sumado a lo limitado de los datos, no podemos inferir que un estado es significativamente mejor que otro para las ventas.
 
 
 ### Sin review
@@ -258,16 +255,283 @@ table_review_T <- filter(books, is_high_review == TRUE)  %>%
 table_review_T
 ```
 
-Fundamentals of R For Beginners es el mas popular
-
-
+Fundamentals of R For Beginners es el mas popular dentro de conjunto de datos sin review.    
+        
+       
 
 
 ## PARTE B
 
-
+```{r}
 sales  <- read_csv("sales2019.csv")
+```
 
+Dimension, 5000 registros y 5 columnas
+```{r}
 dim(sales)
-colnames(sales)
+```
+Tipo de variables 
+```{r}
 str(sales)
+```
+
+Columnas con valores nulos   
+user_submitted_review     885    
+total_purchased           718    
+```{r}
+colSums(is.na(sales))  
+```
+
+### Depurando total_purchased
+
+```{r}
+sales <- filter(sales, !is.na(user_submitted_review) ) 
+dim(sales)
+```
+
+Se eliminaron 885 filas con user_submitted_review NA
+
+Buscamos la media de total_purchased, y la aproximaremos para reemplazar NA por un numero entero
+
+```{r}
+media_purchased <- mean( filter(sales, !is.na(total_purchased))$total_purchased)
+media_purchased
+```
+
+Agrego nueva columna asignando total_purchased 4 cuando es NA   
+Al crear una nueva columna me facilita comprar los valores antiguos con los nuevos   
+
+```{r}
+sales<-sales %>% mutate( total_purchased2 = case_when( 
+                          is.na(total_purchased) == TRUE ~ 4,
+                          TRUE ~ total_purchased
+                        )
+              )
+```
+
+
+### Depurando user_submitted_review
+
+Identifico los posibles valores
+```{r}
+unique(sales$user_submitted_review)
+```
+
+Creo un vector con las palabras que identifican una buena reseña
+```{r}
+positivas <- c("good","great","perfect","awesome","okay","ok","better book","i learned a lot")
+```
+   
+   
+## NOTA
+Esta funcion es buena, puede ser mas rapida y NO necesita mantencion, PERO no funciona al ejecutarla desde el mutate.. entendi el problema pero lo encontre absurdo...
+
+```{r}
+review <- function( string_review ) {
+            r <- FALSE
+            for (i in 1:length(positivas)){
+              if ( str_detect( tolower(string_review), tolower(positivas[c(i)]) ) )
+                r <- TRUE
+            }
+            r
+          }
+```    
+
+
+Por tanto cree una funcion mas mala, pero que funciona
+```{r}
+funcion_mala <- function( string_review ) {
+            string_review <- tolower(string_review)
+            r <- FALSE
+            case_when(
+              str_detect(string_review, "good") == TRUE ~ TRUE,
+              str_detect(string_review, "great") == TRUE ~ TRUE,
+              str_detect(string_review, "awesome") == TRUE ~ TRUE,
+              str_detect(string_review, "ok") == TRUE ~ TRUE,
+              str_detect(string_review, "okay") == TRUE ~ TRUE,
+              str_detect(string_review, "better book") == TRUE ~ TRUE,
+              str_detect(string_review, "i learned a lot") == TRUE ~ TRUE,
+              TRUE ~ FALSE
+            )
+          }
+```
+
+
+
+Y creo la nueva columna 
+```{r}
+sales<-sales %>% mutate( r_review = funcion_mala( user_submitted_review ) )
+
+```
+
+Cambiando a formato fecha
+```{r}
+sales<-sales %>% mutate( date_real = as.Date( date ,format="%m/%d/%y") )
+```
+
+
+Nueva columna para diferenciar antes y despues de la campaña
+```{r}
+sales<-sales %>% mutate( after_campaign = case_when( 
+                          date_real >= "2019-06-01" ~ TRUE,
+                          TRUE ~ FALSE
+                        )
+              )
+```
+
+## ANALISIS    
+
+### Tabla resumen de ventas antes y despues del 1 de julio de 2019   
+
+```{r}
+sales_ab<- sales  %>%
+  group_by(after_campaign) %>%
+  summarize(Total = sum(total_purchased2))
+
+sales_ab
+```
+Efectivamente las ventas aumentaron despues de la campaña.    
+
+
+### Analisando las ventas antes y despues del 1 de julio de 2019 segun cada titulo.
+
+```{r}
+sales_after <- filter(sales, after_campaign == TRUE)  %>%
+  group_by(title) %>%
+  summarize(Total_after = sum(total_purchased2))
+
+sales_before <- filter(sales, after_campaign == FALSE)  %>%
+  group_by(title) %>%
+  summarize(Total_before = sum(total_purchased2))
+  
+resume_sales <- merge (sales_before, sales_after, by = "title")
+
+resume_sales
+
+```
+Segun los totales en la tabla, efectivamente aumentaron las ventas a partir del 1 de julio de 2019.   
+
+Aumentaron en todos los titulos siendo "R for dummies" quien lidera la mayor alza de ventas.   
+
+
+
+
+
+
+
+### Separacion segun tipo de cliente   
+
+```{r}
+sales_after_business <- filter(sales, after_campaign == TRUE & customer_type == "Business" )  %>%
+  group_by(title) %>%
+  summarize(AFTER_BUSINESS = sum(total_purchased2))
+
+sales_after_individual <- filter(sales, after_campaign == TRUE & customer_type == "Individual" )  %>%
+  group_by(title) %>%
+  summarize(AFTER_INDIVIDUAL = sum(total_purchased2))
+  
+  
+
+sales_before_business <- filter(sales, after_campaign == FALSE & customer_type == "Business")  %>%
+  group_by(title) %>%
+  summarize(BEFORE_BUSINESS = sum(total_purchased2))
+  
+sales_before_individual <- filter(sales, after_campaign == FALSE & customer_type == "Individual")  %>%
+  group_by(title) %>%
+  summarize(BEFORE_INDIVIDUAL = sum(total_purchased2))
+  
+resume_sales_1 <- merge (sales_after_business, sales_after_individual, by = "title")
+resume_sales_2 <- merge (sales_before_business, sales_before_individual  , by = "title")
+```
+    
+Contruyendo tabla resumen PERSONAS VS EMPRESAS   
+
+```{r}
+resume_sales_type = merge (resume_sales_2, resume_sales_1  , by = "title")
+
+resume_sales_type
+
+```
+Como se puede observar en la tabla, todos los libros aumentaron sus ventas tanto como Business como Individual, siendo la excepcion el titulo "Top 10 Mistakes R Beginners Make" que aumento sus ventas para Business, pero las disminuyo para Individual.
+
+
+
+## Antes y despues de review   
+
+```{r}
+review_after <- filter(sales, after_campaign == TRUE)  %>%
+  group_by(title) %>%
+  summarize(after_true = sum(r_review == TRUE))
+
+review_before <- filter(sales, after_campaign == FALSE)  %>%
+  group_by(title) %>%
+  summarize(Total_before = sum(r_review == TRUE))
+  
+resume_review <- merge (review_before, review_after, by = "title")
+
+resume_review   
+
+```
+Segun lo analisado todos los titulos aumentaros sus review positivos.  
+
+
+### analisando los review negativos    
+
+```{r}
+review_after_n <- filter(sales, after_campaign == TRUE)  %>%
+  group_by(title) %>%
+  summarize(Total_after_n = sum(r_review == FALSE))
+
+review_before_n <- filter(sales, after_campaign == FALSE)  %>%
+  group_by(title) %>%
+  summarize(Total_before_n = sum(r_review == FALSE))
+  
+resume_review <- merge (review_before_n, review_after_n, by = "title")
+resume_review
+```
+
+Segun esta ultima tabla, tambien aumentaron los review negativos en casi todos los titulos, siendo el titulo "Top 10 Mistakes R Beginners Make" la excepcion.
+
+Por tanto, podemos deducir que el aumento en las valoraciones positiva de los titulos no es a concecuencia de una mejor campaña. porque para ambos casos (review positivos y negativos) se registraron importantes aumentos debido al aumento de las mismas ventas.
+
+
+
+
+### Analisando las ventas por mes
+
+```{r}
+sales<-sales %>% mutate( month = as.numeric(format( date_real, '%m')))
+
+p <- ggplot(data = sales,
+            mapping = aes(x = factor(month),
+            fill = factor(title )))+ 
+            geom_bar(position = 'dodge', stat = 'count')   
+p
+
+```
+
+    
+   
+Si bien podemos ver que no existen grandes diferencias mes a mes, siempre los titulo "Fundamentals of R For Beginners" y "R for dummues" lideraron las ventas.
+
+Para ser mas detallistar con respecto a las ventas por fechas, podemos analisar la dispersion de estas.
+
+```{r}
+
+disp <- ggplot(data = sales,
+       aes(x = date_real, y = title, color=title)) + 
+  geom_point() +
+  geom_jitter()+
+  labs(title="Grafico de dispersión de titulos por fecha")
+  
+disp
+
+```
+ 
+      
+ Aca un punto importante no notado anteriormente, es que el titulo "R Made Easy" no registra ventas en algunos meses.
+ 
+ 
+ 
+ 
+ 
